@@ -10,17 +10,14 @@ MsgPred = Callable[[int, bytes], bool]
 
 class Communicator:
 
-    CHUNK_SIZE: int = 1024
-
     socket: socket
     local: SockAddr
     remotes: list[SockAddr]
     process_incoming: list[MsgProc]
     process_outgoing: list[MsgProc]
 
-    def __init__(self, ip: str, port: int, /,
-                 local: SockAddr = None, timeout: Optional[int] = None):
-        self.remotes = [(ip, port)]
+    def __init__(self, local: SockAddr = None, timeout: Optional[int] = None):
+        self.remotes = []
         self.local = local or ('', 0)
 
         self.socket = socket(AF_INET, SOCK_DGRAM)
