@@ -35,13 +35,22 @@ class Communicator:
         self.socket.close()
 
     def send(self, msg: bytes, *targets: Union[int, slice], flags: int = 0) -> int:
-        targets = targets or range(len(self.remotes))
 
         for proc in self.process_outgoing:
             msg = proc(msg)
 
-        # need to flatten remotes
-        for remote in map(lambda i: self.remotes[i], targets):
+        remotes = reduce(
+            lambda p, q: p + q,
+            map(lambda i: self.remotes[i],
+                filter(lambda t: isinstance(t, int), targets)),
+            itertools.chain.from_iterable(map(
+                lambda slc: yield from self.remotes[i],
+                filter(lambda t: isinstance(t, slice), targets)
+            )),
+            list()
+        )
+
+        for remote in remotes:
             self.socket.sendto(msg, flags, remote)
 
         return len(msg)
