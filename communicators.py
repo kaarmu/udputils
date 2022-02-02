@@ -1,72 +1,77 @@
 
-from socket import socket, AF_INET, SOCK_DGRAM
-from collections.abc import Callable
-from typing import Optional, Union
-import itertools
+import socket
+
+from collections.abc import Callable, Iterator
+from typing import Optional
 
 SockAddr = tuple[str, int]
 MsgProc = Callable[[bytes], bytes]
 MsgPred = Callable[[int, bytes], bool]
 
 class Communicator:
+    """UDP communicator.
+    """
 
-    socket: socket
+    socket: socket.socket
     local: SockAddr
     remotes: list[SockAddr]
     process_incoming: list[MsgProc]
     process_outgoing: list[MsgProc]
 
     @classmethod
-    def Any(cls, *args, **kwargs):
+    def Any(cls, *args, **kwargs) -> 'Communicator':
+        """Connect to any socket."""
         return cls(('', 0), *args, **kwargs)
 
-    def __init__(self, local: SockAddr, timeout: Optional[int] = None):
+    def __init__(self, local: SockAddr, timeout: Optional[int] = None) -> None:
         self.remotes = []
         self.local = local or ('', 0)
 
         self.process_incoming = []
         self.process_outgoing = []
 
-        self.socket = socket(AF_INET, SOCK_DGRAM)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.settimeout(timeout)
         self.socket.bind(self.local)
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.socket.close()
 
-    def send(self, msg: bytes, *targets: Union[int, slice], flags: int = 0) -> int:
-
+    def send(self, msg: bytes, *targets: int | slice | str, flags: int = 0) -> int:
+        """Send a message to all targets."""
+        
+        # apply all pre-processing functions
         for proc in self.process_outgoing:
             msg = proc(msg)
 
-        remotes = reduce(
-            lambda p, q: p + q,
-            map(lambda i: self.remotes[i],
-                filter(lambda t: isinstance(t, int), targets)),
-            itertools.chain.from_iterable(map(
-                lambda slc: yield from self.remotes[i],
-                filter(lambda t: isinstance(t, slice), targets)
-            )),
-            list()
-        )
-
-        for remote in remotes:
+        # send message to remotes
+        for remote in self._fetchRemotes(*targets):
             self.socket.sendto(msg, flags, remote)
 
         return len(msg)
 
     def recv(self, bufsize: int, *, flags: int = 0) -> bytes:
+
         msg, addr = self.socket.recvfrom(bufsize, flags)
 
+        # apply all post-processing functions
         for proc in self.process_incoming:
             msg = proc(msg)
 
         return msg, addr
 
-
-
-
-
-
+    def _fetchRemotes(self, *targets: int | slice | str) -> Iterator[str]:
+        for target in targets:
+            if isinstance(target, int):
+                yield self.remotes[target]
+            elif isinstance(target, slice):
+                yield from self.remotes[target]
+            elif isinstance(target, str):
+                yield target
+            else:
+                raise TypeError("Invalid type of target.")
+        if not targets:
+            yield from self.remotes
+            
 
 
