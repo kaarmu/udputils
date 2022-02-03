@@ -39,7 +39,7 @@ class Communicator:
 
     def send(self, msg: bytes, *targets: int | slice | str, flags: int = 0) -> int:
         """Send a message to all targets."""
-        
+
         # apply all pre-processing functions
         for proc in self.process_outgoing:
             msg = proc(msg)
@@ -60,18 +60,22 @@ class Communicator:
 
         return msg, addr
 
-    def _fetchRemotes(self, *targets: int | slice | str) -> Iterator[str]:
+    def _fetchRemotes(self, *targets: int | slice | tuple[str, int]) -> Iterator[str]:
         for target in targets:
             if isinstance(target, int):
                 yield self.remotes[target]
             elif isinstance(target, slice):
                 yield from self.remotes[target]
-            elif isinstance(target, str):
+            elif isinstance(target, tuple):
                 yield target
             else:
                 raise TypeError("Invalid type of target.")
+
         if not targets:
             yield from self.remotes
-            
+
+            if not self.remotes:
+                raise ValueError("You must specify at least one target.")
+
 
 
